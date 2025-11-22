@@ -24,7 +24,7 @@ func count(db *sqlx.DB) (int, error) {
 }
 
 func openDB(t *testing.T) *sqlx.DB {
-	dbfile := DBFile
+	dbfile := "../" + DBFile
 	envFile := os.Getenv("TODO_DBFILE")
 	if len(envFile) > 0 {
 		dbfile = envFile
@@ -48,6 +48,7 @@ func TestDB(t *testing.T) {
 	assert.NoError(t, err)
 
 	id, err := res.LastInsertId()
+	assert.NoError(t, err)
 
 	var task Task
 	err = db.Get(&task, `SELECT * FROM scheduler WHERE id=?`, id)
