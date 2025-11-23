@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/ArtyomGaribyan/Task-Scheduler/pkg/db"
 )
 
 func writeJson(w http.ResponseWriter, data any) {
-	fmt.Printf("\n")
+	fmt.Printf("\n") // for better readability in logs
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
+		log.Println("Error encoding JSON:", err)
+		http.Error(w, "Error encoding JSON: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Write(jsonData)
@@ -34,14 +34,20 @@ func HandleNextDate(w http.ResponseWriter, r *http.Request) {
 	} else {
 		parsedNow, err = time.Parse(db.DateLayout, now)
 		if err != nil {
-			w.Write([]byte(""))
+			Error := "Next date parse error: " + err.Error()
+			log.Println(Error)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(Error))
 			return
 		}
 	}
 
 	nextDate, err := db.NextDate(parsedNow, date, repeat)
 	if err != nil {
-		w.Write([]byte(""))
+		Error := "Next date calculation error: " + err.Error()
+		log.Println(Error)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(Error))
 		return
 	}
 
@@ -56,109 +62,33 @@ func HandleTask(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&task)
-	if err != nil {
-		task.ID = r.URL.Query().Get("id")
-		task.Title = r.URL.Query().Get("title")
-		task.Date = r.URL.Query().Get("date")
-		task.Comment = r.URL.Query().Get("comment")
-		task.Repeat = r.URL.Query().Get("repeat")
-		if task != (db.Task{}) {
-			goto If_close
-		}
-
-		task.Error = "Invalid request body: " + err.Error()
-		log.Println(task.Error)
-		w.WriteHeader(http.StatusInternalServerError)
-		writeJson(w, task)
+	if err != nil && err.Error() != "EOF" {
+		Error := db.Task{Error: "Invalid request body: " + err.Error()}
+		log.Println(Error)
+		w.WriteHeader(http.StatusBadRequest)
+		writeJson(w, Error)
 		return
 	}
-If_close:
+	if task.ID == "" {
+		task.ID = r.URL.Query().Get("id")
+	}
 
 	log.Println("Received task:", task)
 
 	switch method {
 	case http.MethodGet:
-		if task.ID == "" {
-			task.Error = "Error getting task: missing ID"
-			log.Println(task.Error)
-			w.WriteHeader(http.StatusInternalServerError)
-			writeJson(w, task)
-			return
-		}
-
-		taskResieved, err := db.GetTask(task.ID)
-		log.Println("Task received:", taskResieved.ID, taskResieved.Title, taskResieved.Date, taskResieved.Comment, taskResieved.Repeat)
-		if err != nil {
-			task.Error = "Error getting task: " + err.Error()
-			log.Println(task.Error)
-			w.WriteHeader(http.StatusInternalServerError)
-			writeJson(w, task)
-			return
-		}
-		writeJson(w, taskResieved)
-		return
-
+		GetTaskHandler(w, task.ID)
 	case http.MethodPost:
-		log.Println("Adding task:", task)
-		id, err := addTaskHandler(&task)
-		if err != nil {
-			task.Error = "Error adding task: " + err.Error()
-			log.Println(task.Error)
-			w.WriteHeader(http.StatusInternalServerError)
-			writeJson(w, task)
-			return
-		}
-		task.ID = strconv.Itoa(int(id))
-		log.Println("Added task ID:", task.ID)
-		writeJson(w, task)
-		return
-
+		addTaskHandler(w, task)
 	case http.MethodPut:
-		if task.ID == "" {
-			task.Error = "Error updating task: missing ID"
-			log.Println(task.Error)
-			w.WriteHeader(http.StatusInternalServerError)
-			writeJson(w, task)
-			return
-		}
-
-		log.Println("Updating task:", task.ID, "\n", task.Title, task.Date, task.Comment, task.Repeat)
-		err := UpdateTaskHandler(&task)
-		if err != nil {
-			task.Error = "Error updating task: " + err.Error()
-			log.Println(task.Error)
-			w.WriteHeader(http.StatusInternalServerError)
-			writeJson(w, task)
-			return
-		}
-		writeJson(w, db.Task{})
+		UpdateTaskHandler(w, task)
 	case http.MethodDelete:
-		if task.ID == "" {
-			task.Error = "Error deleting task: missing ID"
-			log.Println(task.Error)
-			w.WriteHeader(http.StatusInternalServerError)
-			writeJson(w, task)
-			return
-		}
-
-		err := db.DeleteTask(task.ID)
-		if err != nil {
-			task.Error = "Error deleting task: " + err.Error()
-			log.Println(task.Error)
-			w.WriteHeader(http.StatusInternalServerError)
-			writeJson(w, task)
-			return
-		}
-
-		log.Printf("Successfully deleted task: %s\n", task.ID)
-		writeJson(w, db.Task{})
-
+		DeleteTaskHandler(w, task.ID)
 	default:
-		task.Error = "Method not allowed"
-		log.Println(task.Error)
-		w.WriteHeader(http.StatusInternalServerError)
-		writeJson(w, task)
-		return
+		Error := db.Task{Error: "Method not allowed"}
+		log.Println(Error)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJson(w, Error)
 	}
 }
 
@@ -168,32 +98,78 @@ func HandleTaskDone(w http.ResponseWriter, r *http.Request) {
 	method := r.Method
 	log.Println("Method:", method)
 	if method != http.MethodPost {
-		log.Println("Method not allowed")
-		w.WriteHeader(http.StatusInternalServerError)
-		task.Error = "Method not allowed"
-		writeJson(w, task)
+		Error := db.Task{Error: "Method not allowed"}
+		log.Println(Error)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJson(w, Error)
 		return
 	}
 
 	task.ID = r.URL.Query().Get("id")
 	if task.ID == "" {
-		task.Error = "Error marking task as done: missing ID"
-		log.Println(task.Error)
-		w.WriteHeader(http.StatusInternalServerError)
-		writeJson(w, task)
+		Error := db.Task{Error: "Validation error for marking task as done: missing ID"}
+		log.Println(Error)
+		w.WriteHeader(http.StatusBadRequest)
+		writeJson(w, Error)
 		return
 	}
 	log.Println("Marking task as done", task.ID)
 
-	err := TaskDoneHandler(task.ID)
+	task, err := db.GetTask(task.ID)
 	if err != nil {
-		task.Error = "Error marking task as done: " + err.Error()
-		log.Println(task.Error)
+		Error := db.Task{Error: "Error for marking task as done: " + err.Error()}
+		log.Println(Error)
 		w.WriteHeader(http.StatusInternalServerError)
-		writeJson(w, task)
+		writeJson(w, Error)
 		return
 	}
 
+	if task.Repeat == "" {
+		err = db.DeleteTask(task.ID)
+		if err != nil {
+			if err.Error() == "incorrect id for deleting task" {
+				Error := db.Task{Error: "Error for marking task as done: " + err.Error()}
+				log.Println(Error)
+				w.WriteHeader(http.StatusBadRequest)
+				writeJson(w, Error)
+				return
+			}
+			Error := db.Task{Error: "Error for marking task as done: " + err.Error()}
+			log.Println(Error)
+			w.WriteHeader(http.StatusInternalServerError)
+			writeJson(w, Error)
+			return
+		}
+		return
+	}
+
+	log.Println("Calculating next date for task:", task)
+	task.Date, err = db.NextDate(time.Now(), task.Date, task.Repeat)
+	if err != nil {
+		Error := db.Task{Error: "Error for calculating next date: " + err.Error()}
+		log.Println(Error)
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJson(w, Error)
+		return
+	}
+	log.Println("Next date for task:", task.Date)
+
+	err = db.UpdateDate(&task)
+	if err != nil {
+		if err.Error() == "incorrect id for updating date" {
+			Error := db.Task{Error: "Error for marking task as done: " + err.Error()}
+			log.Println(Error)
+			w.WriteHeader(http.StatusBadRequest)
+			writeJson(w, Error)
+			return
+		}
+		Error := db.Task{Error: "Error for marking task as done: " + err.Error()}
+		log.Println(Error)
+		w.WriteHeader(http.StatusBadRequest)
+		writeJson(w, Error)
+		return
+	}
+	
 	log.Println("Successfully marked as done: ", task.ID)
 	writeJson(w, db.Task{})
 }
@@ -201,11 +177,7 @@ func HandleTaskDone(w http.ResponseWriter, r *http.Request) {
 func Init() {
 	http.Handle("/", http.FileServer(http.Dir("web")))
 	http.HandleFunc("/api/nextdate", HandleNextDate)
-	http.HandleFunc("api/nextdate", HandleNextDate)
 	http.HandleFunc("/api/task", HandleTask)
-	http.HandleFunc("api/task", HandleTask)
 	http.HandleFunc("/api/tasks", HandleTasks)
-	http.HandleFunc("api/tasks", HandleTasks)
 	http.HandleFunc("/api/task/done", HandleTaskDone)
-	http.HandleFunc("api/task/done", HandleTaskDone)
 }

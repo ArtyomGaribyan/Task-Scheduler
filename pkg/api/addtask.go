@@ -2,15 +2,15 @@ package api
 
 import (
 	"fmt"
+	"log"
+	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/ArtyomGaribyan/Task-Scheduler/pkg/db"
 )
 
-func checkTask (task *db.Task) error {
-if task == nil {
-		return fmt.Errorf("task is nil")
-	}
+func checkTask(task db.Task) error {
 	if task.Title == "" {
 		return fmt.Errorf("title is required")
 	}
@@ -21,7 +21,7 @@ if task == nil {
 	} else {
 		_, err := time.Parse(db.DateLayout, task.Date)
 		if err != nil {
-			return fmt.Errorf("invalid date format: %v", err)
+			return fmt.Errorf("invalid date format: %w", err)
 		}
 	}
 
@@ -30,7 +30,7 @@ if task == nil {
 		if task.Repeat != "" {
 			task.Date, err = db.NextDate(now, task.Date, task.Repeat)
 			if err != nil {
-				return err
+				return fmt.Errorf("next date calculation error: %w", err)
 			}
 		} else {
 			task.Date = today
@@ -39,16 +39,26 @@ if task == nil {
 	return nil
 }
 
-func addTaskHandler(task *db.Task) (int64, error) {
+func addTaskHandler(w http.ResponseWriter, task db.Task) {
+	log.Println("Adding task:", task)
 	err := checkTask(task)
 	if err != nil {
-		return 0, err
+		Error := db.Task{Error: "Validation error for adding task: " + err.Error()}
+		log.Println(Error)
+		w.WriteHeader(http.StatusBadRequest)
+		writeJson(w, Error)
+		return
 	}
 
 	id, err := db.AddTask(task)
 	if err != nil {
-		return 0, err
+		Error := db.Task{Error: "Error for adding task: " + err.Error()}
+		log.Println(Error)
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJson(w, Error)
+		return
 	}
-
-	return id, nil
+	task.ID = strconv.Itoa(int(id))
+	log.Println("Added task ID:", task.ID)
+	writeJson(w, task)
 }

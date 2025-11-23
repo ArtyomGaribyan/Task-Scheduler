@@ -3,7 +3,6 @@ package api
 import (
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/ArtyomGaribyan/Task-Scheduler/pkg/db"
 )
@@ -15,10 +14,10 @@ type TasksResp struct {
 func HandleTasks(w http.ResponseWriter, r *http.Request) {
 	tasks, err := db.Tasks(50)
 	if err != nil {
+		Error := db.Task{Error: "Error fetching tasks: " + err.Error()}
+		log.Println(Error)
 		w.WriteHeader(http.StatusInternalServerError)
-		writeJson(w, TasksResp{
-			Tasks: []*db.Task{},
-		})
+		writeJson(w, Error)
 		return
 	}
 	log.Println("Tasks fetched in handler:", tasks)
@@ -27,44 +26,80 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func UpdateTaskHandler(task *db.Task) error {
+func UpdateTaskHandler(w http.ResponseWriter, task db.Task) {
+	if task.ID == "" {
+		Error := db.Task{Error: "Validation error in updating task: missing ID"}
+		log.Println(Error)
+		w.WriteHeader(http.StatusBadRequest)
+		writeJson(w, Error)
+		return
+	}
+
+	log.Println("Updating task:", task.ID, "\n", task.Title, task.Date, task.Comment, task.Repeat)
+
 	err := checkTask(task)
 	if err != nil {
-		return err
+		Error := db.Task{Error: "Validation error in updating task: wrong data: " + err.Error()}
+		log.Println(Error)
+		w.WriteHeader(http.StatusBadRequest)
+		writeJson(w, Error)
+		return
 	}
 
 	err = db.UpdateTask(task)
 	if err != nil {
-		return err
+		Error := db.Task{Error: "Error in updating task: " + err.Error()}
+		log.Println(Error)
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJson(w, Error)
+		return
 	}
 
-	return nil
+	log.Println("Task updated successfully:", task.ID)
+	writeJson(w, db.Task{})
 }
-func TaskDoneHandler(id string) error {
-	task, err := db.GetTask(id)
-	if err != nil {
-		return err
+
+func GetTaskHandler(w http.ResponseWriter, id string) {
+	task := db.Task{ID: id}
+
+	if task.ID == "" {
+		Error := db.Task{Error: "Error getting task: missing ID"}
+		log.Println(Error)
+		w.WriteHeader(http.StatusBadRequest)
+		writeJson(w, Error)
+		return
 	}
 
-	if task.Repeat == "" {
-		err = db.DeleteTask(id)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-	
-	log.Println("Calculating next date for task:", task)
-	task.Date, err = db.NextDate(time.Now(), task.Date, task.Repeat)
+	taskResieved, err := db.GetTask(task.ID)
 	if err != nil {
-		return err
+		Error := db.Task{Error: "Error getting task from DB: " + err.Error()}
+		log.Println(Error)
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJson(w, Error)
+		return
 	}
-	log.Println("Next date for task:", task.Date)
+	log.Println("Task received:", taskResieved.ID, taskResieved.Title, taskResieved.Date, taskResieved.Comment, taskResieved.Repeat)
+	writeJson(w, taskResieved)
+}
 
-	err = db.UpdateDate(&task)
+func DeleteTaskHandler(w http.ResponseWriter, id string) {
+	if id == "" {
+		Error := db.Task{Error: "Validation error in deleting task: missing ID"}
+		log.Println(Error)
+		w.WriteHeader(http.StatusBadRequest)
+		writeJson(w, Error)
+		return
+	}
+
+	err := db.DeleteTask(id)
 	if err != nil {
-		return err
+		Error := db.Task{Error: "Error deleting task: " + err.Error()}
+		log.Println(Error)
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJson(w, Error)
+		return
 	}
 
-	return nil
+	log.Printf("Successfully deleted task: %s\n", id)
+	writeJson(w, db.Task{})
 }
