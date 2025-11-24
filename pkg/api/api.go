@@ -22,6 +22,18 @@ func writeJson(w http.ResponseWriter, data any) {
 	w.Write(jsonData)
 }
 
+func getTaskBody (w http.ResponseWriter, r *http.Request, task *db.Task) {
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(task)
+	if err != nil {
+		Error := "Invalid request body: " + err.Error()
+		log.Println(Error)
+		w.WriteHeader(http.StatusBadRequest)
+		writeJson(w, Error)
+	}
+	log.Println("Received task:", task)
+}
+
 func HandleNextDate(w http.ResponseWriter, r *http.Request) {
 	now := r.URL.Query().Get("now")
 	date := r.URL.Query().Get("date")
@@ -56,31 +68,19 @@ func HandleNextDate(w http.ResponseWriter, r *http.Request) {
 
 func HandleTask(w http.ResponseWriter, r *http.Request) {
 	var task db.Task
+	task.ID = r.URL.Query().Get("id")
 
 	method := r.Method
 	log.Println("Method:", method)
-
-	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&task)
-	if err != nil && err.Error() != "EOF" {
-		Error := db.Task{Error: "Invalid request body: " + err.Error()}
-		log.Println(Error)
-		w.WriteHeader(http.StatusBadRequest)
-		writeJson(w, Error)
-		return
-	}
-	if task.ID == "" {
-		task.ID = r.URL.Query().Get("id")
-	}
-
-	log.Println("Received task:", task)
 
 	switch method {
 	case http.MethodGet:
 		GetTaskHandler(w, task.ID)
 	case http.MethodPost:
+		getTaskBody(w, r, &task)
 		AddTaskHandler(w, task)
 	case http.MethodPut:
+		getTaskBody(w, r, &task)
 		UpdateTaskHandler(w, task)
 	case http.MethodDelete:
 		DeleteTaskHandler(w, task.ID)
