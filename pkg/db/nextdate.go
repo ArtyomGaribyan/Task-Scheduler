@@ -17,7 +17,7 @@ func caseD(now, date time.Time, repeatSplitted []string) (time.Time, error) {
 
 	days, err := strconv.Atoi(repeatSplitted[1])
 	if err != nil {
-		return time.Time{}, fmt.Errorf("invalid date format: %v", err)
+		return time.Time{}, fmt.Errorf("invalid date format: %w", err)
 	}
 
 	if days <= 0 || days > 400 {
@@ -44,7 +44,7 @@ func NextDate(now time.Time, dstart, repeat string) (string, error) {
 	var nextDate time.Time
 	dateStart, err := time.Parse(DateLayout, dstart)
 	if err != nil {
-		return "", fmt.Errorf("invalid date format: %v", err)
+		return "", fmt.Errorf("invalid date format: %w", err)
 	}
 
 	repeatSplitted := strings.Fields(repeat)
