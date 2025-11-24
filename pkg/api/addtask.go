@@ -10,7 +10,7 @@ import (
 	"github.com/ArtyomGaribyan/Task-Scheduler/pkg/db"
 )
 
-func checkTask(task db.Task) error {
+func checkTask(task *db.Task) error {
 	if task.Title == "" {
 		return fmt.Errorf("title is required")
 	}
@@ -39,9 +39,9 @@ func checkTask(task db.Task) error {
 	return nil
 }
 
-func addTaskHandler(w http.ResponseWriter, task db.Task) {
+func AddTaskHandler(w http.ResponseWriter, task db.Task) {
 	log.Println("Adding task:", task)
-	err := checkTask(task)
+	err := checkTask(&task)
 	if err != nil {
 		Error := db.Task{Error: "Validation error for adding task: " + err.Error()}
 		log.Println(Error)

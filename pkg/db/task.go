@@ -64,6 +64,7 @@ func GetTask(id string) (Task, error) {
 		return Task{}, fmt.Errorf("failed to get task from DB: %w", err)
 	}
 
+	log.Println("Recieved task", task)
 	return task, nil
 }
 

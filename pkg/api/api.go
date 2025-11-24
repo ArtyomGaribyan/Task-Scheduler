@@ -79,7 +79,7 @@ func HandleTask(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		GetTaskHandler(w, task.ID)
 	case http.MethodPost:
-		addTaskHandler(w, task)
+		AddTaskHandler(w, task)
 	case http.MethodPut:
 		UpdateTaskHandler(w, task)
 	case http.MethodDelete:
@@ -140,6 +140,8 @@ func HandleTaskDone(w http.ResponseWriter, r *http.Request) {
 			writeJson(w, Error)
 			return
 		}
+		log.Println("Task", task.ID, "was successfully removed")
+		writeJson(w, db.Task{})
 		return
 	}
 

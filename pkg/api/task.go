@@ -37,7 +37,7 @@ func UpdateTaskHandler(w http.ResponseWriter, task db.Task) {
 
 	log.Println("Updating task:", task.ID, "\n", task.Title, task.Date, task.Comment, task.Repeat)
 
-	err := checkTask(task)
+	err := checkTask(&task)
 	if err != nil {
 		Error := db.Task{Error: "Validation error in updating task: wrong data: " + err.Error()}
 		log.Println(Error)
@@ -70,7 +70,7 @@ func GetTaskHandler(w http.ResponseWriter, id string) {
 		return
 	}
 
-	taskResieved, err := db.GetTask(task.ID)
+	task, err := db.GetTask(task.ID)
 	if err != nil {
 		Error := db.Task{Error: "Error getting task from DB: " + err.Error()}
 		log.Println(Error)
@@ -78,8 +78,8 @@ func GetTaskHandler(w http.ResponseWriter, id string) {
 		writeJson(w, Error)
 		return
 	}
-	log.Println("Task received:", taskResieved.ID, taskResieved.Title, taskResieved.Date, taskResieved.Comment, taskResieved.Repeat)
-	writeJson(w, taskResieved)
+	log.Println("Task received:", task.ID, task.Title, task.Date, task.Comment, task.Repeat)
+	writeJson(w, task)
 }
 
 func DeleteTaskHandler(w http.ResponseWriter, id string) {
