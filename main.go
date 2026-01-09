@@ -8,12 +8,11 @@ import (
 )
 
 func main() {
-	go func() {
-		err := db.InitDB()
-		if err != nil {
-			log.Fatalf("Failed to initialize database: %v", err)
-		}
-	}()
-	
+	err := db.InitDB()
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer db.Close()
+
 	server.Run()
 }
